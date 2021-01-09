@@ -1707,6 +1707,12 @@ static void handle_remove_bp(GdbCmdContext *gdb_ctx, void *user_ctx)
     put_packet("E22");
 }
 
+void wataash_static_regs_lock(void);
+void wataash_static_regs_unlock(void);
+void wataash_static_regs_save(void);
+int wataash_static_regs_diff(void);
+int wataash_regs_diff(const CPUState *cs_orig, const CPUState *cs, const CPUArchState *env_orig, const CPUArchState *env);
+
 /*
  * handle_set/get_reg
  *
@@ -1734,8 +1740,23 @@ static void handle_set_reg(GdbCmdContext *gdb_ctx, void *user_ctx)
 
     reg_size = strlen(gdb_ctx->params[1].data) / 2;
     hextomem(gdbserver_state.mem_buf, gdb_ctx->params[1].data, reg_size);
+
+    const CPUState *cs = gdbserver_state.g_cpu;
+    CPUState cs_orig;
+    const CPUArchState *env = cs->env_ptr;
+    CPUArchState env_orig;
+    const CPUClass *cc = CPU_GET_CLASS(cs);
+    (void)cc;
+    wataash_static_regs_lock();
+    // wataash_static_regs_diff();
+    // wataash_static_regs_save();
     gdb_write_register(gdbserver_state.g_cpu, gdbserver_state.mem_buf->data,
                        gdb_ctx->params[0].val_ull);
+    wataash_regs_diff(&cs_orig, cs, &env_orig, env);
+    // wataash_static_regs_diff();
+    wataash_static_regs_save();
+    wataash_static_regs_unlock();
+
     put_packet("OK");
 }
 

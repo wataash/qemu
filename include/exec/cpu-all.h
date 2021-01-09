@@ -135,18 +135,31 @@ static inline void tswap64s(uint64_t *s)
 #define ldn_p(p, sz) ldn_be_p(p, sz)
 #define stn_p(p, sz, v) stn_be_p(p, sz, v)
 #else
+// load unsigned word; 2 bytes, 16 bits, 0x 23 01
 #define lduw_p(p) lduw_le_p(p)
+// load signed   word
 #define ldsw_p(p) ldsw_le_p(p)
+// load          long; 4 bytes, 32 bits, 0x 67 45 23 01
 #define ldl_p(p) ldl_le_p(p)
+// load          quad; 8 bytes, 64 bits
 #define ldq_p(p) ldq_le_p(p)
+// load float    long
 #define ldfl_p(p) ldfl_le_p(p)
+// load float    quad
 #define ldfq_p(p) ldfq_le_p(p)
+// store         word
 #define stw_p(p, v) stw_le_p(p, v)
+// store         long
 #define stl_p(p, v) stl_le_p(p, v)
+// store         quad
 #define stq_p(p, v) stq_le_p(p, v)
+// store float   long
 #define stfl_p(p, v) stfl_le_p(p, v)
+// store float   quad
 #define stfq_p(p, v) stfq_le_p(p, v)
+// load n TODO
 #define ldn_p(p, sz) ldn_le_p(p, sz)
+// store n TODO
 #define stn_p(p, sz, v) stn_le_p(p, sz, v)
 #endif
 

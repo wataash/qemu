@@ -2737,6 +2737,9 @@ void qemu_init(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
+            // qemu_find_opts("machine")->head.tqh_first->head.tqh_first->next.tqe_next->next.tqe_next->next...
+            //                                                 -kernel  ->name: "kernel"
+            //                                                                 -initrd ->name: "initrd"
             case QEMU_OPTION_kernel:
                 qemu_opts_set(qemu_find_opts("machine"), "kernel", optarg, &error_abort);
                 break;

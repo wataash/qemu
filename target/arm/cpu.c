@@ -1,3 +1,196 @@
+#include "qemu/osdep.h"
+
+#include <string.h>
+
+#include "hw/core/cpu.h"
+#include "qemu/thread.h"
+#include "qemu/typedefs.h"
+#include "target/arm/cpu.h"
+
+static QemuSpin wataash_static_regs_lock_;
+static CPUState wataash_static_regs_cs;
+static CPUARMState wataash_static_regs_env;
+
+// TODO: wataash_static_regs_lock_init() - qemu_spin_init()
+void wataash_static_regs_lock(void);
+void wataash_static_regs_unlock(void);
+void wataash_static_regs_save(void);
+int wataash_static_regs_diff(void);
+int wataash_regs_diff(const CPUState *cs_orig, const CPUState *cs, const CPUArchState *env_orig, const CPUArchState *env);
+
+void wataash_static_regs_lock(void)
+{
+    if (qemu_spin_locked(&wataash_static_regs_lock_))
+        wataash_debug_reached();
+    qemu_spin_lock(&wataash_static_regs_lock_);
+}
+
+void wataash_static_regs_unlock(void)
+{
+    qemu_spin_unlock(&wataash_static_regs_lock_);
+}
+
+void wataash_static_regs_save(void)
+{
+    asm("nop");
+    const CPUState *cs = current_cpu;
+    if (cs == NULL)
+        return; // startup: coroutine_trampoline() -> wataash_static_regs_save()
+    const ARMCPU *cpu = ARM_CPU(cs);
+    const CPUArchState *env = cs->env_ptr;
+
+    const CPUState *cs0 = first_cpu;
+    if (cs != cs0)
+        wataash_debug_reached(); // TODO
+    const ARMCPU *cpu0 = ARM_CPU(cs0);
+    if (cpu != cpu0)
+        wataash_debug_reached(); // TODO
+
+    memcpy(&wataash_static_regs_cs, cs, sizeof(*cs));
+    memcpy(&wataash_static_regs_env, env, sizeof(*env));
+
+    asm("nop");
+}
+
+int wataash_static_regs_diff(void)
+{
+    asm("nop");
+    const CPUState *cs = current_cpu;
+    if (cs == NULL)
+        return 0; // same as i386? startup: coroutine_trampoline() -> wataash_static_regs_diff()
+    const ARMCPU *cpu = ARM_CPU(cs);
+    const CPUArchState *env = cs->env_ptr;
+
+    const CPUState *cs0 = first_cpu;
+    if (cs != cs0)
+        wataash_debug_reached(); // TODO
+    const ARMCPU *cpu0 = ARM_CPU(cs0);
+    if (cpu != cpu0)
+        wataash_debug_reached(); // TODO
+
+    int ret = wataash_regs_diff(&wataash_static_regs_cs, cs, &wataash_static_regs_env, env);
+    asm("nop");
+    return ret;
+}
+
+// ref: arm_cpu_dump_state()
+int wataash_regs_diff(const CPUState *_cs_orig, const CPUState *_cs, const CPUArchState *_env_orig, const CPUArchState *_env)
+{
+#define __UNCONST(a)	((void *)(unsigned long)(const void *)(a))
+    CPUState *cs_orig = __UNCONST(_cs_orig);
+    (void)cs_orig;
+    CPUState *cs = __UNCONST(_cs);
+    (void)cs;
+    CPUArchState *env_orig = __UNCONST(_env_orig);
+    CPUArchState *env = __UNCONST(_env);
+
+    if (is_a64(env)) {
+        wataash_debug_reached();
+        return 0;
+    }
+
+    int ret = memcmp(env_orig->regs, env->regs, sizeof(env->regs));
+    if (ret == 0)
+        return 0;
+
+#define diff_d(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %d->%d\x1b[0m\n", env_orig->field, env->field)
+#define diff_u(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %u->%u\x1b[0m\n", env_orig->field, env->field)
+#define diff_x(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %#x->%#x\x1b[0m\n", env_orig->field, env->field)
+#define diff_lx(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %#lx->%#lx\x1b[0m\n", env_orig->field, env->field)
+#define diff_d_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %d->%d\x1b[0m\n", env_orig->field, env->field)
+#define diff_u_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %u->%u\x1b[0m\n", env_orig->field, env->field)
+#define diff_x_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %#x->%#x\x1b[0m\n", env_orig->field, env->field)
+#define diff_lx_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %#lx->%#lx\x1b[0m\n", env_orig->field, env->field)
+
+    diff_x(regs[0]);
+    diff_x(regs[1]);
+    diff_x(regs[2]);
+    diff_x(regs[3]);
+    diff_x(regs[4]);
+    diff_x(regs[5]);
+    diff_x(regs[6]);
+    diff_x(regs[7]);
+    diff_x(regs[8]);
+    diff_x(regs[9]);
+    diff_x(regs[10]);
+    diff_x(regs[11]);
+    diff_x(regs[12]);
+    diff_x(regs[13]);
+    diff_x(regs[14]);
+    // r15 = $pc, too verbose
+    // TODO: "arm r15 レジスタ"
+    // diff_x(regs[15]);
+
+    if (arm_feature(env, ARM_FEATURE_M))
+        wataash_debug_reached();
+
+    uint32_t psr_orig = cpsr_read(env_orig);
+    uint32_t psr = cpsr_read(env);
+
+    if (arm_feature(env, ARM_FEATURE_EL3))
+        wataash_debug_reached();
+
+    if (psr != psr_orig) {
+        wataash_debug_os("\x1b[35mpsr: %#x->%#x", psr_orig, psr);
+        // static inline const char *aarch32_mode_name(uint32_t psr)
+        {
+            static const char cpu_mode_names[16][4] = {
+                "usr", "fiq", "irq", "svc", "???", "???", "mon", "abt",
+                "???", "???", "hyp", "und", "???", "???", "???", "sys"
+            };
+            if ((psr & 0xf) != (psr_orig & 0xf))
+                wataash_debug_os(" %s->%s(%x->%x)", cpu_mode_names[psr_orig & 0xf], cpu_mode_names[psr & 0xf], psr_orig & 0xf, psr & 0xf);
+        }
+        if ((psr & CPSR_T     ) != (psr_orig & CPSR_T     )) wataash_debug_os(     " %cT (1<<5 0x20)",  psr & CPSR_T ? '+' : '-');
+        if ((psr & CPSR_F     ) != (psr_orig & CPSR_F     )) wataash_debug_os(     " %cF (1<<6 0x40)",  psr & CPSR_F ? '+' : '-');
+        if ((psr & CPSR_I     ) != (psr_orig & CPSR_I     )) wataash_debug_os(     " %cI (1<<7 0x80)",  psr & CPSR_I ? '+' : '-');
+        if ((psr & CPSR_A     ) != (psr_orig & CPSR_A     )) wataash_debug_os(     " %cA (1<<8 0x100)",  psr & CPSR_A ? '+' : '-');
+        if ((psr & CPSR_E     ) != (psr_orig & CPSR_E     )) wataash_debug_os(     " %cE (1<<9 0x200)",  psr & CPSR_E ? '+' : '-');
+        if ((psr & 1U<<10     ) != (psr_orig & 1U<<10     )) wataash_debug_os(     " %c? (1<<10 0x400)", psr & (1U<<10) ? '+' : '-');
+        if ((psr & 1U<<11     ) != (psr_orig & 1U<<11     )) wataash_debug_os(     " %c? (1<<11 0x800)", psr & (1U<<11) ? '+' : '-');
+        if ((psr & 1U<<12     ) != (psr_orig & 1U<<12     )) wataash_debug_os(     " %c? (1<<12 0x1000)", psr & (1U<<12) ? '+' : '-');
+        if ((psr & 1U<<13     ) != (psr_orig & 1U<<13     )) wataash_debug_os(     " %c? (1<<13 0x2000)", psr & (1U<<13) ? '+' : '-');
+        if ((psr & 1U<<14     ) != (psr_orig & 1U<<14     )) wataash_debug_os(     " %c? (1<<14 0x4000)", psr & (1U<<14) ? '+' : '-');
+        if ((psr & 1U<<15     ) != (psr_orig & 1U<<15     )) wataash_debug_os(     " %c? (1<<15 0x8000)", psr & (1U<<15) ? '+' : '-');
+        if ((psr & CPSR_GE    ) != (psr_orig & CPSR_GE    )) wataash_debug_os(    " %cGE (1<<16 0x10000)", psr & CPSR_GE ? '+' : '-');
+        if ((psr & 1U<<17     ) != (psr_orig & 1U<<17     )) wataash_debug_os(     " %c? (1<<17 0x20000)", psr & (1U<<17) ? '+' : '-');
+        if ((psr & 1U<<18     ) != (psr_orig & 1U<<18     )) wataash_debug_os(     " %c? (1<<18 0x40000)", psr & (1U<<18) ? '+' : '-');
+        if ((psr & 1U<<19     ) != (psr_orig & 1U<<19     )) wataash_debug_os(     " %c? (1<<19 0x80000)", psr & (1U<<19) ? '+' : '-');
+        if ((psr & CPSR_IL    ) != (psr_orig & CPSR_IL    )) wataash_debug_os(    " %cIL (1<<20 0x100000)", psr & CPSR_IL ? '+' : '-');
+        if ((psr & 1U<<21     ) != (psr_orig & 1U<<21     )) wataash_debug_os(     " %c? (1<<21 0x200000)", psr & (1U<<21) ? '+' : '-');
+        if ((psr & CPSR_PAN   ) != (psr_orig & CPSR_PAN   )) wataash_debug_os(   " %cPAN (1<<22 0x400000)", psr & CPSR_PAN ? '+' : '-');
+        if ((psr & 1U<<23     ) != (psr_orig & 1U<<23     )) wataash_debug_os(     " %c? (1<<23 0x800000)", psr & (1U<<23) ? '+' : '-');
+        if ((psr & CPSR_J     ) != (psr_orig & CPSR_J     )) wataash_debug_os(     " %cJ (1<<24 0x1000000)", psr & CPSR_J ? '+' : '-');
+        if ((psr & CPSR_IT_0_1) != (psr_orig & CPSR_IT_0_1)) wataash_debug_os(" %cIT_0_1 (1<<25,26 0x6000000)", psr & CPSR_IT_0_1 ? '+' : '-');
+        if ((psr & CPSR_Q     ) != (psr_orig & CPSR_Q     )) wataash_debug_os(     " %cQ (1<<27 0x8000000)", psr & CPSR_Q ? '+' : '-');
+        if ((psr & CPSR_V     ) != (psr_orig & CPSR_V     )) wataash_debug_os(     " %cV (1<<28 0x10000000)", psr & CPSR_V ? '+' : '-');
+        if ((psr & CPSR_C     ) != (psr_orig & CPSR_C     )) wataash_debug_os(     " %cC (1<<29 0x20000000)", psr & CPSR_C ? '+' : '-');
+        if ((psr & CPSR_Z     ) != (psr_orig & CPSR_Z     )) wataash_debug_os(     " %cZ (1<<30 0x40000000)", psr & CPSR_Z ? '+' : '-');
+        if ((psr & CPSR_N     ) != (psr_orig & CPSR_N     )) wataash_debug_os(     " %cN (1<<31 0x80000000)", psr & CPSR_N ? '+' : '-');
+        wataash_debug_os("\x1b[0m\n");
+    }
+
+    // {
+    //     ARMCPU *cpu = ARM_CPU(cs);
+    //     int numvfpregs = 0;
+    //     if (cpu_isar_feature(aa32_simd_r32, cpu)) {
+    //         numvfpregs = 32;
+    //     } else if (cpu_isar_feature(aa32_vfp_simd, cpu)) {
+    //         numvfpregs = 16;
+    //     }
+    //     for (int i = 0; i < numvfpregs; i++) {
+    //         uint64_t v = *aa32_vfp_dreg(env, i);
+    //         wataash_debug_os("s%02d=%08x s%02d=%08x d%02d=%016" PRIx64 "\n",
+    //             i * 2, (uint32_t)v,
+    //             i * 2 + 1, (uint32_t)(v >> 32),
+    //             i, v);
+    //     }
+    //     wataash_debug_os("FPSCR: %08x\n", vfp_get_fpscr(env));
+    // }
+
+    return ret;
+}
+
 /*
  * QEMU ARM CPU
  *

@@ -630,6 +630,7 @@ void helper_debug(CPUX86State *env)
     CPUState *cs = env_cpu(env);
 
     cs->exception_index = EXCP_DEBUG;
+    // @jmp
     cpu_loop_exit(cs);
 }
 

@@ -247,6 +247,8 @@ static int os_host_main_loop_wait(int64_t timeout)
     qemu_mutex_unlock_iothread();
     replay_mutex_unlock();
 
+    // (gdb) si
+    // -> ret: 1
     ret = qemu_poll_ns((GPollFD *)gpollfds->data, gpollfds->len, timeout);
 
     replay_mutex_lock();

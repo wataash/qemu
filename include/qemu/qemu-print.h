@@ -13,6 +13,10 @@
 #ifndef QEMU_PRINT_H
 #define QEMU_PRINT_H
 
+#include <stdio.h> // FILE
+
+#include "qemu/compiler.h" // GCC_FMT_ATTR
+
 int qemu_vprintf(const char *fmt, va_list ap) GCC_FMT_ATTR(1, 0);
 int qemu_printf(const char *fmt, ...) GCC_FMT_ATTR(1, 2);
 

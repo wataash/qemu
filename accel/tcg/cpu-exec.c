@@ -144,6 +144,35 @@ static void init_delay_params(SyncClocks *sc, const CPUState *cpu)
 }
 #endif /* CONFIG USER ONLY */
 
+void wataash_static_regs_lock(void);
+void wataash_static_regs_unlock(void);
+void wataash_static_regs_save(void);
+int wataash_static_regs_diff(void);
+int wataash_regs_diff(const CPUState *cs_orig, const CPUState *cs, const CPUArchState *env_orig, const CPUArchState *env);
+
+__attribute__((weak)) void wataash_static_regs_lock(void)
+{
+    asm("nop");
+}
+__attribute__((weak)) void wataash_static_regs_unlock(void)
+{
+    asm("nop");
+}
+__attribute__((weak)) void wataash_static_regs_save(void)
+{
+    asm("nop");
+}
+__attribute__((weak)) int wataash_static_regs_diff(void)
+{
+    asm("nop");
+    return 0;
+}
+__attribute__((weak)) int wataash_regs_diff(const CPUState *cs_orig, const CPUState *cs, const CPUArchState *env_orig, const CPUArchState *env)
+{
+    asm("nop");
+    return 0;
+}
+
 /* Execute a TB, and fix up the CPU state afterwards if necessary */
 /*
  * Disable CFI checks.
@@ -185,7 +214,28 @@ cpu_tb_exec(CPUState *cpu, TranslationBlock *itb, int *tb_exit)
     }
 #endif /* DEBUG_DISAS */
 
+    // @jmp
+    // tcg:
+    // qemu_thread_start() tcg_cpu_thread_fn() tcg_cpu_exec() cpu_exec()
+    //   cpu_loop_exec_tb() cpu_tb_exec() code_gen_buffer() helper_cli()
+    // tci:
+    // qemu_thread_start() tcg_rr_cpu_thread_fn() tcg_cpu_exec() cpu_exec()
+    //   cpu_loop_exec_tb() cpu_tb_exec() tcg_qemu_tb_exec() helper_cli()
+    //                                    ^^^^^^^^^^^^^^^^^^ tci.c
+    //                                                       helper_debug() cpu_loop_exit() siglongjmp() -> cpu_exec() sigsetjmp
+
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
     ret = tcg_qemu_tb_exec(env, tb_ptr);
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
+
     cpu->can_do_io = 1;
     /*
      * TODO: Delay swapping back to the read-write region of the TB
@@ -762,8 +812,20 @@ int cpu_exec(CPUState *cpu)
      */
     init_delay_params(&sc, cpu);
 
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
+
+    // @jmp
     /* prepare setjmp context for exception handling */
     if (sigsetjmp(cpu->jmp_env, 0) != 0) {
+        // wataash_static_regs_lock();
+        // if (wataash_static_regs_diff() != 0) {
+        //     wataash_static_regs_save();
+        // }
+        // wataash_static_regs_unlock();
 #if defined(__clang__)
         /* Some compilers wrongly smash all local variables after
          * siglongjmp. There were bug reports for gcc 4.5.0 and clang.
@@ -815,7 +877,19 @@ int cpu_exec(CPUState *cpu)
         }
     }
 
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_debug_reached();
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
     cpu_exec_exit(cpu);
+    wataash_static_regs_lock();
+    if (wataash_static_regs_diff() != 0) {
+        wataash_static_regs_save();
+    }
+    wataash_static_regs_unlock();
+
     rcu_read_unlock();
 
     return ret;

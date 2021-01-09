@@ -1,3 +1,292 @@
+#include "qemu/osdep.h"
+
+#include <stdint.h>
+#include <string.h>
+
+#include "exec/cpu-common.h" // cpu_physical_memory_read
+#include "hw/core/cpu.h"
+#include "qemu/thread.h"
+#include "qemu/typedefs.h"
+#include "target/i386/cpu.h"
+
+static QemuSpin wataash_static_regs_lock_;
+static CPUState wataash_static_regs_cs;
+static CPUX86State wataash_static_regs_env;
+
+// TODO: wataash_static_regs_lock_init() - qemu_spin_init()
+void wataash_static_regs_lock(void);
+void wataash_static_regs_unlock(void);
+void wataash_static_regs_save(void);
+int wataash_static_regs_diff(void);
+int wataash_regs_diff(const CPUState *cs_orig, const CPUState *cs, const CPUArchState *env_orig, const CPUArchState *env);
+
+void wataash_static_regs_lock(void)
+{
+    if (qemu_spin_locked(&wataash_static_regs_lock_))
+        wataash_debug_reached();
+    qemu_spin_lock(&wataash_static_regs_lock_);
+}
+
+void wataash_static_regs_unlock(void)
+{
+    qemu_spin_unlock(&wataash_static_regs_lock_);
+}
+
+void wataash_static_regs_save(void)
+{
+    asm("nop");
+    const CPUState *cs = current_cpu;
+    if (cs == NULL)
+        return; // startup: coroutine_trampoline() -> wataash_static_regs_save()
+    const X86CPU *cpu = X86_CPU(cs);
+    const CPUArchState *env = cs->env_ptr;
+
+    const CPUState *cs0 = first_cpu;
+    if (cs != cs0) {
+        wataash_debug_os("\x1b[31mTODO: -smp >= 2\x1b[0m\n");
+        wataash_debug_reached();
+    }
+    const X86CPU *cpu0 = X86_CPU(cs0);
+    if (cpu != cpu0) {
+        wataash_debug_os("\x1b[31mTODO: -smp >= 2\x1b[0m\n");
+        wataash_debug_reached();
+    }
+
+    memcpy(&wataash_static_regs_cs, cs, sizeof(wataash_static_regs_cs));
+    memcpy(&wataash_static_regs_env, env, offsetof(CPUX86State, start_init_save));
+
+    asm("nop");
+}
+
+int wataash_static_regs_diff(void)
+{
+    asm("nop");
+    const CPUState *cs = current_cpu;
+    if (cs == NULL)
+        return 0; // startup: coroutine_trampoline() -> wataash_static_regs_diff()
+    const X86CPU *cpu = X86_CPU(cs);
+    const CPUArchState *env = cs->env_ptr;
+
+    const CPUState *cs0 = first_cpu;
+    if (cs != cs0) {
+        wataash_debug_os("\x1b[31mTODO: -smp >= 2\x1b[0m\n");
+        wataash_debug_reached();
+    }
+    const X86CPU *cpu0 = X86_CPU(cs0);
+    if (cpu != cpu0) {
+        wataash_debug_os("\x1b[31mTODO: -smp >= 2\x1b[0m\n");
+        wataash_debug_reached();
+    }
+
+    int ret = wataash_regs_diff(&wataash_static_regs_cs, cs, &wataash_static_regs_env, env);
+    asm("nop");
+    return ret;
+}
+
+static void wataash_regs_diff_gdt(const SegmentCache *old, const SegmentCache *new)
+{
+    uint8_t buf[1024];
+
+    wataash_debug_os("\x1b[33mgdt updated:\x1b[0m\n");
+
+    // TODO: lgdt の指し先 (gdtdesc) 自体のhexもdump
+
+    if (new->limit + 1 > sizeof(buf)) {
+        wataash_debug_reached();
+        return;
+    }
+
+#if !defined(CONFIG_USER_ONLY) // TODO: move to far outer scope...
+    cpu_physical_memory_read(new->base, buf, new->limit + 1);
+#endif
+
+    size_t i = 0;
+    target_ulong basep = new->base;
+    for (uint8_t *bufp = &buf[0]; bufp < buf + new->limit + 1; bufp += 8, basep += 8, i++) {
+        uint32_t e1 = *(uint32_t *)&bufp[0];
+        uint32_t e2 = *(uint32_t *)&bufp[4];
+
+        // get_seg_limit()
+        unsigned int limit;
+        limit = (e1 & 0xffff) | (e2 & 0x000f0000);
+        if (e2 & DESC_G_MASK) {
+            limit = (limit << 12) | 0xfff;
+        }
+
+        // get_seg_base
+        uint32_t base;
+        {
+            base = (e1 >> 16) | ((e2 & 0xff) << 16) | (e2 & 0xff000000);
+        }
+
+        wataash_debug_os("\x1b[33m  %zu "TARGET_FMT_lx": 0x%02x%02x%02x%02x%02x%02x%02x%02x (base:%#x limit:%#x)\x1b[0m\n", i, basep, bufp[0], bufp[1], bufp[2], bufp[3], bufp[4], bufp[5], bufp[6], bufp[7], base, limit);
+    }
+    asm("nop");
+}
+
+// ref: x86_cpu_dump_state()
+int wataash_regs_diff(const CPUState *cs_orig, const CPUState *cs, const CPUArchState *env_orig, const CPUArchState *env)
+{
+    // int ret = memcmp(cs_orig, cs, sizeof(*cs));
+    int ret = memcmp(&cs_orig->halted, &cs->halted, sizeof(cs->halted));
+    if (ret == 0)
+        ret = memcmp(env_orig, env, offsetof(typeof(*env), start_init_save));
+    if (ret == 0)
+        return 0;
+
+    // 0x%08x (%#010x)
+    if (env->regs[R_EAX] != env_orig->regs[R_EAX]) wataash_debug_os("\x1b[35mregs[R_EAX]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_EAX], (uintmax_t)env->regs[R_EAX]);
+    if (env->regs[R_ECX] != env_orig->regs[R_ECX]) wataash_debug_os("\x1b[35mregs[R_ECX]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_ECX], (uintmax_t)env->regs[R_ECX]);
+    if (env->regs[R_EDX] != env_orig->regs[R_EDX]) wataash_debug_os("\x1b[35mregs[R_EDX]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_EDX], (uintmax_t)env->regs[R_EDX]);
+    if (env->regs[R_EBX] != env_orig->regs[R_EBX]) wataash_debug_os("\x1b[35mregs[R_EBX]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_EBX], (uintmax_t)env->regs[R_EBX]);
+    if (env->regs[R_ESP] != env_orig->regs[R_ESP]) wataash_debug_os("\x1b[35mregs[R_ESP]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_ESP], (uintmax_t)env->regs[R_ESP]);
+    if (env->regs[R_EBP] != env_orig->regs[R_EBP]) wataash_debug_os("\x1b[35mregs[R_EBP]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_EBP], (uintmax_t)env->regs[R_EBP]);
+    if (env->regs[R_ESI] != env_orig->regs[R_ESI]) wataash_debug_os("\x1b[35mregs[R_ESI]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_ESI], (uintmax_t)env->regs[R_ESI]);
+    if (env->regs[R_EDI] != env_orig->regs[R_EDI]) wataash_debug_os("\x1b[35mregs[R_EDI]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_EDI], (uintmax_t)env->regs[R_EDI]);
+#ifdef TARGET_X86_64
+    if (env->regs[R_R8]  != env_orig->regs[R_R8])  wataash_debug_os("\x1b[35mregs[R_R8]:  %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R8],  (uintmax_t)env->regs[R_R8]);
+    if (env->regs[R_R9]  != env_orig->regs[R_R9])  wataash_debug_os("\x1b[35mregs[R_R9]:  %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R9],  (uintmax_t)env->regs[R_R9]);
+    if (env->regs[R_R10] != env_orig->regs[R_R10]) wataash_debug_os("\x1b[35mregs[R_R10]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R10], (uintmax_t)env->regs[R_R10]);
+    if (env->regs[R_R11] != env_orig->regs[R_R11]) wataash_debug_os("\x1b[35mregs[R_R11]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R11], (uintmax_t)env->regs[R_R11]);
+    if (env->regs[R_R12] != env_orig->regs[R_R12]) wataash_debug_os("\x1b[35mregs[R_R12]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R12], (uintmax_t)env->regs[R_R12]);
+    if (env->regs[R_R13] != env_orig->regs[R_R13]) wataash_debug_os("\x1b[35mregs[R_R13]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R13], (uintmax_t)env->regs[R_R13]);
+    if (env->regs[R_R14] != env_orig->regs[R_R14]) wataash_debug_os("\x1b[35mregs[R_R14]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R14], (uintmax_t)env->regs[R_R14]);
+    if (env->regs[R_R15] != env_orig->regs[R_R15]) wataash_debug_os("\x1b[35mregs[R_R15]: %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->regs[R_R15], (uintmax_t)env->regs[R_R15]);
+#endif /* TARGET_X86_64 */
+
+    // TODO: x86_64
+    // only i386 considered for now
+
+    if (cs->halted != cs_orig->halted) wataash_debug_os (" cs->halted:%d->%d", cs_orig->halted, cs->halted);
+
+    // too verbose
+    // if (env->eip != env_orig->eip) wataash_debug_os("\x1b[35meip: %#x->%#x\x1b[0m\n", env_orig->eip, env->eip);
+
+    if (env->eflags != env_orig->eflags) {
+        wataash_debug_os("\x1b[35meflags: %#jx->%#jx", (uintmax_t)env_orig->eflags, (uintmax_t)env->eflags);
+        if ((env->eflags & CC_C) != (env_orig->eflags & CC_C))             wataash_debug_os    (" %cCC_C(1<<0 0x1)", env_orig->eflags & CC_C ? '-' : '+');
+        if ((env->eflags & 0x2) != (env_orig->eflags & 0x2))               wataash_debug_os    (   " %c?(1<<1 0x2)", env_orig->eflags & 0x2 ? '-' : '+');
+        if ((env->eflags & CC_P) != (env_orig->eflags & CC_P))             wataash_debug_os    (" %cCC_C(1<<2 0x4)", env_orig->eflags & CC_P ? '-' : '+');
+        if ((env->eflags & 0x8) != (env_orig->eflags & 0x8))               wataash_debug_os    (   " %c?(1<<3 0x8)", env_orig->eflags & 0x8 ? '-' : '+');
+        if ((env->eflags & CC_A) != (env_orig->eflags & CC_A))             wataash_debug_os    (" %cCC_A(1<<4 0x10)", env_orig->eflags & CC_A ? '-' : '+');
+        if ((env->eflags & 0x20) != (env_orig->eflags & 0x20))             wataash_debug_os       (" %c?(1<<5 0x20)", env_orig->eflags & 0x20 ? '-' : '+');
+        if ((env->eflags & CC_Z) != (env_orig->eflags & CC_Z))             wataash_debug_os    (" %cCC_Z(1<<6 0x40)", env_orig->eflags & CC_Z ? '-' : '+');
+        if ((env->eflags & CC_S) != (env_orig->eflags & CC_S))             wataash_debug_os    (" %cCC_S(1<<7 0x80)", env_orig->eflags & CC_S ? '-' : '+');
+        if ((env->eflags & TF_MASK) != (env_orig->eflags & TF_MASK))       wataash_debug_os (" %cTF_MASK(1<<8 0x100)", env_orig->eflags & TF_MASK ? '-' : '+');
+        if ((env->eflags & IF_MASK) != (env_orig->eflags & IF_MASK))       wataash_debug_os (" %cIF_MASK(1<<9 0x200)", env_orig->eflags & IF_MASK ? '-' : '+');
+        if ((env->eflags & DF_MASK) != (env_orig->eflags & DF_MASK))       wataash_debug_os (" %cDF_MASK(1<<10 0x400)", env_orig->eflags & DF_MASK ? '-' : '+');
+        if ((env->eflags & CC_O) != (env_orig->eflags & CC_O))             wataash_debug_os    (" %cCC_O(1<<11 0x0800)", env_orig->eflags & CC_O ? '-' : '+');
+        if ((env->eflags & IOPL_MASK) != (env_orig->eflags & IOPL_MASK))   wataash_debug_os (" IOPL_MASK(1<<12,13 03000)%jx->%jx", (uintmax_t)env_orig->eflags & IOPL_MASK, (uintmax_t)env->eflags & IOPL_MASK);
+        if ((env->eflags & NT_MASK) != (env_orig->eflags & NT_MASK))       wataash_debug_os (" %cNT_MASK(1<<14 0x4000)", env_orig->eflags & NT_MASK ? '-' : '+');
+        if ((env->eflags & 0x8000) != (env_orig->eflags & 0x8000))         wataash_debug_os       (" %c?(1<<15 0x8000)", env_orig->eflags & 0x8000 ? '-' : '+');
+        if ((env->eflags & RF_MASK) != (env_orig->eflags & RF_MASK))       wataash_debug_os (" %cRF_MASK(1<<16 0x10000)", env_orig->eflags & RF_MASK ? '-' : '+');
+        if ((env->eflags & VM_MASK) != (env_orig->eflags & VM_MASK))       wataash_debug_os (" %cVM_MASK(1<<17 0x20000)", env_orig->eflags & VM_MASK ? '-' : '+');
+        if ((env->eflags & AC_MASK) != (env_orig->eflags & AC_MASK))       wataash_debug_os (" %cAC_MASK(1<<18 0x40000)", env_orig->eflags & AC_MASK ? '-' : '+');
+        if ((env->eflags & VIF_MASK) != (env_orig->eflags & VIF_MASK))     wataash_debug_os(" %cVIF_MASK(1<<19 0x80000)", env_orig->eflags & VIF_MASK ? '-' : '+');
+        if ((env->eflags & VIP_MASK) != (env_orig->eflags & VIP_MASK))     wataash_debug_os(" %cVIP_MASK(1<<20 0x100000)", env_orig->eflags & VIP_MASK ? '-' : '+');
+        if ((env->eflags & ID_MASK) != (env_orig->eflags & ID_MASK))       wataash_debug_os (" %cID_MASK(1<<21 0x200000)", env_orig->eflags & ID_MASK ? '-' : '+');
+        if ((env->eflags & 0x400000)   != (env_orig->eflags & 0x400000))   wataash_debug_os(       " %c?(1<<22 0x400000)",   env_orig->eflags & 0x400000 ? '-' : '+');
+        if ((env->eflags & 0x800000)   != (env_orig->eflags & 0x800000))   wataash_debug_os(       " %c?(1<<23 0x800000)",   env_orig->eflags & 0x800000 ? '-' : '+');
+        if ((env->eflags & 0x1000000)  != (env_orig->eflags & 0x1000000))  wataash_debug_os(       " %c?(1<<24 0x1000000)",  env_orig->eflags & 0x1000000 ? '-' : '+');
+        if ((env->eflags & 0x2000000)  != (env_orig->eflags & 0x2000000))  wataash_debug_os(       " %c?(1<<25 0x2000000)",  env_orig->eflags & 0x2000000 ? '-' : '+');
+        if ((env->eflags & 0x4000000)  != (env_orig->eflags & 0x4000000))  wataash_debug_os(       " %c?(1<<26 0x4000000)",  env_orig->eflags & 0x4000000 ? '-' : '+');
+        if ((env->eflags & 0x8000000)  != (env_orig->eflags & 0x8000000))  wataash_debug_os(       " %c?(1<<27 0x8000000)",  env_orig->eflags & 0x8000000 ? '-' : '+');
+        if ((env->eflags & 0x10000000) != (env_orig->eflags & 0x10000000)) wataash_debug_os(       " %c?(1<<28 0x10000000)", env_orig->eflags & 0x10000000 ? '-' : '+');
+        if ((env->eflags & 0x20000000) != (env_orig->eflags & 0x20000000)) wataash_debug_os(       " %c?(1<<29 0x20000000)", env_orig->eflags & 0x20000000 ? '-' : '+');
+        if ((env->eflags & 0x40000000) != (env_orig->eflags & 0x40000000)) wataash_debug_os(       " %c?(1<<30 0x40000000)", env_orig->eflags & 0x40000000 ? '-' : '+');
+        if ((env->eflags & 0x80000000) != (env_orig->eflags & 0x80000000)) wataash_debug_os(       " %c?(1<<31 0x80000000)", env_orig->eflags & 0x80000000 ? '-' : '+');
+        wataash_debug_os("\x1b[0m\n");
+    }
+
+#define diff_d(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %jd->%jd\x1b[0m\n", (intmax_t)env_orig->field, (intmax_t)env->field)
+#define diff_u(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %ju->%ju\x1b[0m\n", (uintmax_t)env_orig->field, (uintmax_t)env->field)
+#define diff_x(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[35m" #field ": %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->field, (uintmax_t)env->field)
+#define diff_lx(field) diff_x(field)
+#define diff_d_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %jd->%jd\x1b[0m\n", (intmax_t)env_orig->field, (intmax_t)env->field)
+#define diff_u_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %ju->%ju\x1b[0m\n", (uintmax_t)env_orig->field, (uintmax_t)env->field)
+#define diff_x_(field) if (env->field != env_orig->field) wataash_debug_os("\x1b[37m" #field ": %#jx->%#jx\x1b[0m\n", (uintmax_t)env_orig->field, (uintmax_t)env->field)
+#define diff_lx_(field) diffl_x_(field)
+    diff_u_(cc_dst);
+    diff_u_(cc_src);
+    diff_u_(cc_src2);
+    diff_u_(cc_op);
+    diff_d_(df);
+    diff_x_(hflags);
+    (void)(HF_CPL_MASK | HF_INHIBIT_IRQ_SHIFT | HF_SMM_SHIFT);
+    diff_x_(hflags2);
+    (void)HF2_GIF_SHIFT;
+
+    (void)env->hflags2;
+
+    diff_x(segs[R_ES].selector);
+    diff_x(segs[R_ES].base);
+    diff_x(segs[R_ES].limit);
+    diff_x_(segs[R_ES].flags);
+    diff_x(segs[R_CS].selector);
+    diff_x(segs[R_CS].base);
+    diff_x(segs[R_CS].limit);
+    diff_x_(segs[R_CS].flags);
+    diff_x(segs[R_SS].selector);
+    diff_x(segs[R_SS].base);
+    diff_x(segs[R_SS].limit);
+    diff_x_(segs[R_SS].flags);
+    diff_x(segs[R_DS].selector);
+    diff_x(segs[R_DS].base);
+    diff_x(segs[R_DS].limit);
+    diff_x_(segs[R_DS].flags);
+    diff_x(segs[R_FS].selector);
+    diff_x(segs[R_FS].base);
+    diff_x(segs[R_FS].limit);
+    diff_x_(segs[R_FS].flags);
+    diff_x(segs[R_GS].selector);
+    diff_x(segs[R_GS].base);
+    diff_x(segs[R_GS].limit);
+    diff_x_(segs[R_GS].flags);
+
+    diff_x(ldt.selector);
+    diff_x(ldt.base);
+    diff_x(ldt.limit);
+    diff_x_(ldt.flags);
+    diff_x(tr.selector);
+    diff_x(tr.base);
+    diff_x(tr.limit);
+    diff_x_(tr.flags);
+    diff_x(gdt.selector);
+    diff_x(gdt.base);
+    diff_x(gdt.limit);
+    diff_x_(gdt.flags);
+    if (memcmp(&env_orig->gdt, &env->gdt, sizeof(env->gdt)) != 0)
+        wataash_regs_diff_gdt(&env_orig->gdt, &env->gdt);
+    diff_x(ldt.selector);
+    diff_x(ldt.base);
+    diff_x(ldt.limit);
+    diff_x_(ldt.flags);
+
+    diff_x(cr[0]);
+    diff_x(cr[1]);
+    diff_x(cr[2]);
+    diff_x(cr[3]);
+    diff_x(cr[4]);
+    diff_x(a20_mask);
+
+    diff_lx(bnd_regs[0].lb);
+    diff_lx(bnd_regs[0].ub);
+    diff_lx(bnd_regs[1].lb);
+    diff_lx(bnd_regs[1].ub);
+    diff_lx(bnd_regs[2].lb);
+    diff_lx(bnd_regs[2].ub);
+    diff_lx(bnd_regs[3].lb);
+    diff_lx(bnd_regs[3].ub);
+    diff_lx(bndcs_regs.cfgu);
+    diff_lx(bndcs_regs.sts);
+    diff_lx(msr_bndcfgs);
+    diff_lx(efer);
+
+    // TODO: rest
+
+    return ret;
+}
+
 /*
  *  i386 CPUID helper functions
  *
@@ -1828,12 +2117,61 @@ static CPUCaches epyc_rome_cache_info = {
 
 static X86CPUDefinition builtin_x86_defs[] = {
     {
+        // qemu-system-x86_64 -cpu help
+        // x86 qemu64                (alias configured by machine type)
+        // x86 qemu64-v1             QEMU Virtual CPU version 2.5+
+        //
+        // <6>[    1.916635] smpboot: CPU0: AMD QEMU Virtual CPU version 2.5+ HACKED qemu64 (family: 0x6, model: 0x6, stepping: 0x3)
+        // -kvm:
+        // <6>[    0.191679] smpboot: CPU0: Intel QEMU Virtual CPU version 2.5+ HACKED qemu64 (family: 0x6, model: 0x6, stepping: 0x3)
+        //
+        // /proc/cpuinfo
+        // microcode       : 0x1   (-kvm only)
+        // cpu MHz         : 2808.000
+        // cache size      : 512 KB
+        // cache size      : 16384 KB (-kvm)
+        // physical id     : 0
+        // siblings        : 1
+        // core id         : 0
+        // cpu cores       : 1
+        // apicid          : 0
+        // initial apicid  : 0
+        // fpu             : yes
+        // fpu_exception   : yes
+        // wp              : yes
+        // bugs            : fxsave_leak sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass
+        // bugs            : cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf (-kvm)
+        // bogomips        : 5616.00
+        // TLB size        : 1024 4K pages (not in -kvm)
+        // clflush size    : 64
+        // cache_alignment : 64
+        // address sizes   : 40 bits physical, 48 bits virtual
+        // power management:
+        //
         .name = "qemu64",
+        // cpuid level     : 13
         .level = 0xd,
+        // vendor_id       : AuthenticAMD
+        // vendor_id       : GenuineIntel (-kvm)
         .vendor = CPUID_VENDOR_AMD,
+        // cpu family      : 6
         .family = 6,
+        // model           : 6
         .model = 6,
+        // stepping        : 3
         .stepping = 3,
+        //                                                                               vvv not in -kvm                                  v -kvm:rep_good     v -kvm: x2apic     v -kvm:cpuid_fault pti                 .
+        //                                                                                                                                     v -kvm:xtopology                                                         .
+        //                                                                                                                                           v -kvm:tsc_known_freq        vvvvvvvvvvvvvvvvvvvvvvvvv not in -kvm .
+        // flags             : fpu de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 syscall nx lm nopl cpuid pni cx16 hypervisor lahf_lm svm 3dnowprefetch vmmcall             .
+        // PPRO_FEATURES  FP87?    DE PSE TSC                                                                                                                                                                           .
+        // PPRO_FEATURES                      MSR     MCE CX8               PGE     CMOV                                                                                                                                .
+        // PPRO_FEATURES                                                                 PAT               MMX FXSR SSE SSE2                                                                                            .
+        // PPRO_FEATURES                          PAE         APIC SEP                                                                                                                                                  .
+        // FEAT_1_EDX(excluding PPRO_FEATURES)                         MTRR     MCA          PSE36 CLFLUSH                                                                                                              .
+        // FEAT_1_ECX    EXT_SSE3?                                                                                                                        CX16                                                          .
+        // FEAT_8000_0001_EDX                                                                                                SYSCALL NX LM                                                                              .
+        // FEAT_8000_0001_ECX                                                                                                                                             LAHF_LM EXT3_SVM                              .
         .features[FEAT_1_EDX] =
             PPRO_FEATURES |
             CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA |
@@ -1845,7 +2183,12 @@ static X86CPUDefinition builtin_x86_defs[] = {
         .features[FEAT_8000_0001_ECX] =
             CPUID_EXT3_LAHF_LM | CPUID_EXT3_SVM,
         .xlevel = 0x8000000A,
+#if 0
         .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION,
+#else /* 0 */
+        // model name	: QEMU Virtual CPU version 2.5+ HACKED qemu64
+        .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION " HACKED qemu64",
+#endif /* 0 */
     },
     {
         .name = "phenom",
@@ -1974,7 +2317,11 @@ static X86CPUDefinition builtin_x86_defs[] = {
         .features[FEAT_1_ECX] =
             CPUID_EXT_SSE3,
         .xlevel = 0x80000004,
+#if 0
         .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION,
+#else /* 0 */
+        .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION " HACKED qemu32",
+#endif /* 0 */
     },
     {
         .name = "kvm32",
@@ -2100,7 +2447,11 @@ static X86CPUDefinition builtin_x86_defs[] = {
         .features[FEAT_8000_0001_EDX] =
             CPUID_EXT2_MMXEXT | CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT,
         .xlevel = 0x80000008,
+#if 0
         .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION,
+#else /* 0 */
+        .model_id = "QEMU Virtual CPU version " QEMU_HW_VERSION " HACKED athlon",
+#endif /* 0 */
     },
     {
         .name = "n270",
@@ -2547,6 +2898,15 @@ static X86CPUDefinition builtin_x86_defs[] = {
             { /* end of list */ }
         }
     },
+    // qemu-system-x86_64 -cpu help
+    // x86 Haswell               (alias configured by machine type)
+    // x86 Haswell-IBRS          (alias of Haswell-v3)
+    // x86 Haswell-noTSX         (alias of Haswell-v2)
+    // x86 Haswell-noTSX-IBRS    (alias of Haswell-v4)
+    // x86 Haswell-v1            Intel Core Processor (Haswell)
+    // x86 Haswell-v2            Intel Core Processor (Haswell, no TSX)
+    // x86 Haswell-v3            Intel Core Processor (Haswell, IBRS)
+    // x86 Haswell-v4            Intel Core Processor (Haswell, no TSX, IBRS)
     {
         .name = "Haswell",
         .level = 0xd,
@@ -2630,7 +2990,10 @@ static X86CPUDefinition builtin_x86_defs[] = {
         .xlevel = 0x80000008,
         .model_id = "Intel Core Processor (Haswell)",
         .versions = (X86CPUVersionDefinition[]) {
+            // x86 Haswell-v1            Intel Core Processor (Haswell)
             { .version = 1 },
+            // x86 Haswell-noTSX         (alias of Haswell-v2)
+            // x86 Haswell-v2            Intel Core Processor (Haswell, no TSX)
             {
                 .version = 2,
                 .alias = "Haswell-noTSX",
@@ -2642,6 +3005,8 @@ static X86CPUDefinition builtin_x86_defs[] = {
                     { /* end of list */ }
                 },
             },
+            // x86 Haswell-IBRS          (alias of Haswell-v3)
+            // x86 Haswell-v3            Intel Core Processor (Haswell, IBRS)
             {
                 .version = 3,
                 .alias = "Haswell-IBRS",
@@ -2660,6 +3025,8 @@ static X86CPUDefinition builtin_x86_defs[] = {
                     { /* end of list */ }
                 }
             },
+            // x86 Haswell-noTSX-IBRS    (alias of Haswell-v4)
+            // x86 Haswell-v4            Intel Core Processor (Haswell, no TSX, IBRS)
             {
                 .version = 4,
                 .alias = "Haswell-noTSX-IBRS",

@@ -127,10 +127,12 @@ static int dotl_to_open_flags(int flags)
         { P9_DOTL_NONBLOCK, O_NONBLOCK } ,
         { P9_DOTL_DSYNC, O_DSYNC },
         { P9_DOTL_FASYNC, FASYNC },
+        // TODO: darwin
         { P9_DOTL_DIRECT, O_DIRECT },
         { P9_DOTL_LARGEFILE, O_LARGEFILE },
         { P9_DOTL_DIRECTORY, O_DIRECTORY },
         { P9_DOTL_NOFOLLOW, O_NOFOLLOW },
+        // TODO: darwin
         { P9_DOTL_NOATIME, O_NOATIME },
         { P9_DOTL_SYNC, O_SYNC },
     };
@@ -163,6 +165,7 @@ static int get_dotl_openflags(V9fsState *s, int oflags)
     /*
      * Ignore direct disk access hint until the server supports it.
      */
+    // TODO: darwin
     flags &= ~O_DIRECT;
     return flags;
 }
@@ -1276,6 +1279,7 @@ static int stat_to_v9stat_dotl(V9fsPDU *pdu, const struct stat *stbuf,
     v9lstat->st_size = stbuf->st_size;
     v9lstat->st_blksize = stbuf->st_blksize;
     v9lstat->st_blocks = stbuf->st_blocks;
+    // TODO: darwin: st_atim st_mtim st_ctim
     v9lstat->st_atime_sec = stbuf->st_atime;
     v9lstat->st_atime_nsec = stbuf->st_atim.tv_nsec;
     v9lstat->st_mtime_sec = stbuf->st_mtime;
@@ -1821,6 +1825,7 @@ out_nofid:
 
 static int32_t coroutine_fn get_iounit(V9fsPDU *pdu, V9fsPath *path)
 {
+    // TODO: darwin
     struct statfs stbuf;
     int32_t iounit = 0;
     V9fsState *s = pdu->s;
@@ -3461,6 +3466,7 @@ static void coroutine_fn v9fs_statfs(void *opaque)
     ssize_t retval = 0;
     size_t offset = 7;
     V9fsFidState *fidp;
+    // TODO: darwin
     struct statfs stbuf;
     V9fsPDU *pdu = opaque;
     V9fsState *s = pdu->s;

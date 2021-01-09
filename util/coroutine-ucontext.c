@@ -145,6 +145,11 @@ void start_switch_fiber_tsan(void **fake_stack_save,
 #endif
 }
 
+void wataash_static_regs_lock(void);
+void wataash_static_regs_unlock(void);
+int wataash_static_regs_diff(void);
+void wataash_static_regs_save(void);
+
 static void coroutine_trampoline(int i0, int i1)
 {
     union cc_arg arg;
@@ -160,12 +165,39 @@ static void coroutine_trampoline(int i0, int i1)
     co = &self->base;
 
     /* Initialize longjmp environment and switch back the caller */
+#ifndef TODO // TODO: only in qemu-system-i386
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_debug_reached();
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
+#endif /* TODO */
+    asm("nop");
     if (!sigsetjmp(self->env, 0)) {
+#ifndef TODO
+        // wataash_static_regs_lock();
+        // if (wataash_static_regs_diff() != 0) {
+        //     wataash_debug_reached();
+        //     wataash_static_regs_save();
+        // }
+        // wataash_static_regs_unlock();
+#endif /* TODO */
+        asm("nop");
         start_switch_fiber_asan(COROUTINE_YIELD, &fake_stack_save, leader.stack,
                                 leader.stack_size);
         start_switch_fiber_tsan(&fake_stack_save, self, true); /* true=caller */
         siglongjmp(*(sigjmp_buf *)co->entry_arg, 1);
     }
+#ifndef TODO
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_debug_reached();
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
+#endif /* TODO */
+    asm("nop");
 
     finish_switch_fiber(fake_stack_save);
 
@@ -220,8 +252,22 @@ Coroutine *qemu_coroutine_new(void)
     makecontext(&uc, (void (*)(void))coroutine_trampoline,
                 2, arg.i[0], arg.i[1]);
 
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_debug_reached();
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
     /* swapcontext() in, siglongjmp() back out */
+    asm("nop");
     if (!sigsetjmp(old_env, 0)) {
+        // wataash_static_regs_lock();
+        // if (wataash_static_regs_diff() != 0) {
+        //     wataash_debug_reached();
+        //     wataash_static_regs_save();
+        // }
+        // wataash_static_regs_unlock();
+        asm("nop");
         start_switch_fiber_asan(COROUTINE_YIELD, &fake_stack_save, co->stack,
                                 co->stack_size);
         start_switch_fiber_tsan(&fake_stack_save,
@@ -244,6 +290,13 @@ Coroutine *qemu_coroutine_new(void)
 
         swapcontext(&old_uc, &uc);
     }
+    // wataash_static_regs_lock();
+    // if (wataash_static_regs_diff() != 0) {
+    //     wataash_debug_reached();
+    //     wataash_static_regs_save();
+    // }
+    // wataash_static_regs_unlock();
+    asm("nop");
 
     finish_switch_fiber(fake_stack_save);
 

@@ -9034,7 +9034,22 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     }
 
     dc->pc_curr = dc->base.pc_next;
+
+    static unsigned int setbuf_once_done;
+    if (!setbuf_once_done) {
+        // setbuf(stdout, NULL);
+        // setbuf(stderr, NULL);
+        setbuf_once_done = 1;
+    }
+    // TODO: test thumb
+    wataash_debug_os("\x1b[37m------------------------------\n");
+    (void)log_target_disas;
+    rcu_read_lock();
+    target_disas(stderr, cpu, dc->base.pc_next, dc->thumb ? 2 : 4);
+    rcu_read_unlock();
+
     insn = arm_ldl_code(env, dc->base.pc_next, dc->sctlr_b);
+
     dc->insn = insn;
     dc->base.pc_next += 4;
     disas_arm_insn(dc, insn);

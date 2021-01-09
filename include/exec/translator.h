@@ -173,6 +173,18 @@ void translator_loop_temp_check(DisasContextBase *db);
         return fullname ## _swap(env, pc, false);                       \
     }
 
+// @ldub
+//
+// ld: load?
+//
+// u: unsigned
+// s: signed
+//
+// b: byte 1
+// w: word 2
+// l: long 4
+// q: quad 8
+
 GEN_TRANSLATOR_LD(translator_ldub, uint8_t, cpu_ldub_code, /* no swap */)
 GEN_TRANSLATOR_LD(translator_ldsw, int16_t, cpu_ldsw_code, bswap16)
 GEN_TRANSLATOR_LD(translator_lduw, uint16_t, cpu_lduw_code, bswap16)

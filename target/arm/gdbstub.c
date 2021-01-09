@@ -167,6 +167,14 @@ static void arm_register_sysreg_for_xml(gpointer key, gpointer value,
     }
 }
 
+// cpu->dyn_xml.desc
+// <?xml version="1.0"?>
+// <!DOCTYPE target SYSTEM "gdb-target.dtd">
+// <feature name="org.qemu.gdb.arm.sys.regs">
+//   <reg name="MAIR0" bitsize="32" group="cp_regs"/>
+//   <reg name="MAIR1" bitsize="32" group="cp_regs"/>
+//   ...
+// </feature>
 int arm_gen_dynamic_sysreg_xml(CPUState *cs, int base_reg)
 {
     ARMCPU *cpu = ARM_CPU(cs);

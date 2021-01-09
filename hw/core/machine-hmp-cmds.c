@@ -25,6 +25,7 @@
 #include "sysemu/numa.h"
 #include "hw/boards.h"
 
+// "cpus"
 void hmp_info_cpus(Monitor *mon, const QDict *qdict)
 {
     CpuInfoFastList *cpu_list, *cpu;

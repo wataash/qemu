@@ -94,6 +94,7 @@ void x86_cpu_set_a20(X86CPU *cpu, int a20_state)
 
     a20_state = (a20_state != 0);
     if (a20_state != ((env->a20_mask >> 20) & 1)) {
+        wataash_debug_os("\x1b[33m%s(): A20 change (%d->%d)\x1b[0m\n", __func__, !a20_state, a20_state);
         CPUState *cs = CPU(cpu);
 
         qemu_log_mask(CPU_LOG_MMU, "A20 update: a20=%d\n", a20_state);
@@ -106,6 +107,10 @@ void x86_cpu_set_a20(X86CPU *cpu, int a20_state)
         tlb_flush(cs);
         env->a20_mask = ~(1 << 20) | (a20_state << 20);
     }
+    else {
+        wataash_debug_os("\x1b[33m%s(): A20 unchanged (%d->%d)\x1b[0m\n", __func__, a20_state, a20_state);
+        qemu_log_mask(CPU_LOG_MMU, "A20 unchanged: a20=%d\n", a20_state);
+    }
 }
 
 void cpu_x86_update_cr0(CPUX86State *env, uint32_t new_cr0)
@@ -113,6 +118,9 @@ void cpu_x86_update_cr0(CPUX86State *env, uint32_t new_cr0)
     X86CPU *cpu = env_archcpu(env);
     int pe_state;
 
+    // if changed any:
+    // cr0 31 ... 16 ...  0
+    //     PG     WP     PE
     qemu_log_mask(CPU_LOG_MMU, "CR0 update: CR0=0x%08x\n", new_cr0);
     if ((new_cr0 & (CR0_PG_MASK | CR0_WP_MASK | CR0_PE_MASK)) !=
         (env->cr[0] & (CR0_PG_MASK | CR0_WP_MASK | CR0_PE_MASK))) {

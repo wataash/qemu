@@ -27,6 +27,21 @@
 #ifndef QEMU_OSDEP_H
 #define QEMU_OSDEP_H
 
+#include "qemu/qemu-print.h"
+
+extern unsigned int wataash_bootloader_started;
+#define wataash_debug_os(format, ...)
+#undef wataash_debug_os
+#define wataash_debug_os(format, ...) qemu_fprintf(stderr, format, ##__VA_ARGS__)
+
+static inline void wataash_debug_reached(const char *file, unsigned int line, const char *func)
+{
+    asm("nop");
+    qemu_fprintf(stderr, "\x1b[31mREACHED: %s:%u %s()\x1b[0m\n", file, line, func);
+    asm("nop");
+}
+#define wataash_debug_reached() wataash_debug_reached(__FILE__, __LINE__, __func__)
+
 #include "config-host.h"
 #ifdef NEED_CPU_H
 #include CONFIG_TARGET

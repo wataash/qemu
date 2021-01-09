@@ -2312,13 +2312,14 @@ if targetos == 'darwin'
   summary_info += {'Objective-C compiler': meson.get_compiler('objc').cmd_array()[0]}
 endif
 summary_info += {'ARFLAGS':           config_host['ARFLAGS']}
+# TODO: -ggdb3: ignored? -g used instead
 summary_info += {'CFLAGS':            ' '.join(get_option('c_args')
                                                + ['-O' + get_option('optimization')]
-                                               + (get_option('debug') ? ['-g'] : []))}
+                                               + (get_option('debug') ? ['-ggdb3'] : []))}
 if link_language == 'cpp'
   summary_info += {'CXXFLAGS':        ' '.join(get_option('cpp_args')
                                                + ['-O' + get_option('optimization')]
-                                               + (get_option('debug') ? ['-g'] : []))}
+                                               + (get_option('debug') ? ['-ggdb3'] : []))}
 endif
 link_args = get_option(link_language + '_link_args')
 if link_args.length() > 0

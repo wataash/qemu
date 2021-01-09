@@ -6417,6 +6417,41 @@ else
 fi
 mv $cross config-meson.cross
 
+echo "qemu_suffix         $qemu_suffix"
+echo "debug               $debug"
+echo "debug_info          $debug_info"
+echo "werror              $werror"
+echo "strip_opt           $strip_opt"
+echo "pie                 $pie"
+echo "pie                 $pie"
+echo "gcov                $gcov"
+echo "malloc              $malloc"
+echo "malloc_trim         $malloc_trim"
+echo "sparse              $sparse"
+echo "kvm                 $kvm"
+echo "hax                 $hax"
+echo "whpx                $whpx"
+echo "hvf                 $hvf"
+echo "xen                 $xen"
+echo "xen_pci_passthrough $xen_pci_passthrough"
+echo "tcg                 $tcg"
+echo "cocoa               $cocoa"
+echo "mpath               $mpath"
+echo "sdl                 $sdl"
+echo "sdl_image           $sdl_image"
+echo "vnc                 $vnc"
+echo "vnc_sasl            $vnc_sasl"
+echo "vnc_jpeg            $vnc_jpeg"
+echo "vnc_png             $vnc_png"
+echo "gettext             $gettext"
+echo "xkbcommon           $xkbcommon"
+echo "u2f                 $u2f"
+echo "capstone            $capstone"
+echo "slirp               $slirp"
+echo "fdt                 $fdt"
+echo "iconv               $iconv"
+echo "curses              $curses"
+
 rm -rf meson-private meson-info meson-logs
 unset staticpic
 if ! version_ge "$($meson --version)" 0.56.0; then

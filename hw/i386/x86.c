@@ -706,6 +706,14 @@ static uint64_t read_pvh_start_addr(void *arg1, void *arg2, bool is64)
     return pvh_start_addr;
 }
 
+// -kernel netbsd
+// #0  0x000055555596cbb3 in load_elfboot (kernel_filename=0x555556a05f30 "/home/wsh/qc/netbsd/obj.amd64/sys/arch/amd64/compile/GENERIC/netbsd", kernel_file_size=14231328, header=0x7fffffffbdb0 "\177ELF\002\001\001", pvh_xen_start_addr=0, fw_cfg=0x555556b8e200) at /home/wsh/qc/qemu/hw/i386/x86.c:326
+// #1  0x000055555596cef1 in x86_load_linux (x86ms=0x5555568bd630, fw_cfg=0x555556b8e200, acpi_data_size=163840, pvh_enabled=true, linuxboot_dma_enabled=true) at /home/wsh/qc/qemu/hw/i386/x86.c:456
+// #2  0x0000555555970ddf in pc_memory_init (pcms=0x5555568bd630, system_memory=0x555556839300, rom_memory=0x55555678a350, ram_memory=0x7fffffffdeb0) at /home/wsh/qc/qemu/hw/i386/pc.c:1254
+// #3  0x0000555555974697 in pc_init1 (machine=0x5555568bd630, host_type=0x555555fd99fc "i440FX-pcihost", pci_type=0x555555fd99f5 "i440FX") at /home/wsh/qc/qemu/hw/i386/pc_piix.c:183
+// #4  0x0000555555975167 in pc_init_v4_2 (machine=0x5555568bd630) at /home/wsh/qc/qemu/hw/i386/pc_piix.c:428
+// #5  0x0000555555aedef4 in machine_run_board_init (machine=0x5555568bd630) at /home/wsh/qc/qemu/hw/core/machine.c:1143
+// #6  0x0000555555a4d200 in main (argc=3, argv=0x7fffffffe308, envp=0x7fffffffe328) at /home/wsh/qc/qemu/vl.c:4351
 static bool load_elfboot(const char *kernel_filename,
                          int kernel_file_size,
                          uint8_t *header,
@@ -719,6 +727,9 @@ static bool load_elfboot(const char *kernel_filename,
     uint64_t elf_low, elf_high;
     int kernel_size;
 
+    // -kernel netbsd: header: 7f454c46 02010100
+    //            E L F
+    // same as: xxd netbsd | head
     if (ldl_p(header) != 0x464c457f) {
         return false; /* no elfboot */
     }
@@ -756,6 +767,13 @@ static bool load_elfboot(const char *kernel_filename,
     return true;
 }
 
+// -kernel bzImage
+// #0  0x000055555596d2e0 in x86_load_linux (x86ms=0x55555688a800, fw_cfg=0x555556b13b50, acpi_data_size=163840, pvh_enabled=true, linuxboot_dma_enabled=true) at /home/wsh/qc/qemu/hw/i386/x86.c:552
+// #1  0x0000555555970ddf in pc_memory_init (pcms=0x55555688a800, system_memory=0x555556824500, rom_memory=0x55555677df00, ram_memory=0x7fffffffde90) at /home/wsh/qc/qemu/hw/i386/pc.c:1254
+// #2  0x0000555555974697 in pc_init1 (machine=0x55555688a800, host_type=0x555555fd99fc "i440FX-pcihost", pci_type=0x555555fd99f5 "i440FX") at /home/wsh/qc/qemu/hw/i386/pc_piix.c:183
+// #3  0x0000555555975167 in pc_init_v4_2 (machine=0x55555688a800) at /home/wsh/qc/qemu/hw/i386/pc_piix.c:428
+// #4  0x0000555555aedef4 in machine_run_board_init (machine=0x55555688a800) at /home/wsh/qc/qemu/hw/core/machine.c:1143
+// #5  0x0000555555a4d200 in main (argc=6, argv=0x7fffffffe2e8, envp=0x7fffffffe320) at /home/wsh/qc/qemu/vl.c:4351
 void x86_load_linux(X86MachineState *x86ms,
                     FWCfgState *fw_cfg,
                     int acpi_data_size,
@@ -796,6 +814,58 @@ void x86_load_linux(X86MachineState *x86ms,
                 kernel_filename, strerror(errno));
         exit(1);
     }
+
+    // -kernel bzImage: header: 4d5aea07  00c0078c  c88ed88e  c08ed031
+    // same as: xxd bzImage | head
+
+    // https://www.kernel.org/doc/html/latest/x86/boot.html
+
+    // 00000000: 4d5a ea07 00c0 078c c88e d88e c08e d031  MZ.............1
+    // 00000010: e4fb fcbe 4000 ac20 c074 09b4 0ebb 0700  ....@.. .t......
+    // 00000020: cd10 ebf2 31c0 cd16 cd19 eaf0 ff00 f000  ....1...........
+    // 00000030: 0000 0000 0000 0000 0000 0000 8200 0000  ................
+    // 00000040: 5573 6520 6120 626f 6f74 206c 6f61 6465  Use a boot loade
+    // 00000050: 722e 0d0a 0a52 656d 6f76 6520 6469 736b  r....Remove disk
+    // 00000060: 2061 6e64 2070 7265 7373 2061 6e79 206b   and press any k
+    // 00000070: 6579 2074 6f20 7265 626f 6f74 2e2e 2e0d  ey to reboot....
+    // 00000080: 0a00 5045 0000 6486 0400 0000 0000 0000  ..PE..d.........
+    // ...
+    // 000001f0: ff1f 0100 387f 0800 0000 ffff 0000 55aa  ....8.........U.
+    //           ^^                                         setup_sects 0xff (0x01f1 - 0x02f0)
+    //             ^^ ^^                                    root_flags  0x011f ?
+    //                  ...
+    //                                              ^^^^    boot_flag magic 0xaa55
+    // 00000200: eb66 4864 7253 0d02 0000 0000 0010 e031  .fHdrS.........1
+    //           ^^^^                                       jump
+    //                ^^^^ ^^^^                             header magic "HdrS"
+    //                          ^^^^                        version 0x020d (525) 2.13
+    //                               ^^^^ ^^^^              realmode_swtch
+    //                                         ^^^^         start_sys_seg
+    //                                              ^^^^    kernel_version 0x31e0 (pointer)
+    // 00000210: 0001 0080 0000 1000 0000 0000 0000 0000  ................
+    //                                                      .
+    //                                                      .
+    //                                                      .
+    //                                                      .
+    //                                                      .
+    //                                                      .
+    // 00000220: 0000 0000 f053 0000 0000 0000 ffff ff7f  .....S..........
+    // 00000230: 0000 2000 0115 3f00 ff07 0000 0000 0000  .. ...?.........
+    // 00000240: 0000 0000 0000 0000 b103 0000 c757 8400  .............W..
+    // 00000250: 0000 0000 0000 0000 0000 0001 0000 0000  ................
+    // 00000260: 0030 fd01 9001 0000 8cd8 8ec0 fc8c d239  .0.............9
+    // 00000270: c289 e274 16ba f051 f606 1102 8074 048b  ...t...Q.....t..
+    // 00000280: 1624 0281 c200 0473 0231 d283 e2fc 7503  .$.....s.1....u.
+    // 00000290: bafc ff8e d066 0fb7 e2fb 1e68 9f02 cb66  .....f.....h...f
+    // 000002a0: 813e b83e 55aa 5a5a 7517 bfc0 3eb9 f351  .>.>U.ZZu...>..Q
+    // 000002b0: 6631 c029 f9c1 e902 f366 ab66 e81c 2b00  f1.).....f.f..+.
+    // 000002c0: 0066 b8d5 0300 0066 e8ec 0000 00f4 ebfd  .f.....f........
+    // 000002d0: 3806 fb02 7405 a2fb 02eb 0066 9c0f a00f  8...t......f....
+    // 000002e0: a866 6083 ec2c 89d6 89e7 b90b 00f3 66a5  .f`..,........f.
+    // 000002f0: 6661 0fa9 0fa1 071f 669d cd00 669c 1e06  fa......f...f...
+    // ...
+    // 000031e0: 2073 6574 7570 2063 6f64 650a 0064 6562   setup code..deb
+
 
     /* kernel protocol version */
     if (ldl_p(header + 0x202) == 0x53726448) {

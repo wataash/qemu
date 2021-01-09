@@ -98,6 +98,9 @@ static target_ulong compute_all_adcox(target_ulong dst, target_ulong src1,
 target_ulong helper_cc_compute_all(target_ulong dst, target_ulong src1,
                                    target_ulong src2, int op)
 {
+    // if (wataash_bootloader_started)
+    //     wataash_debug_os("\x1b[37m%s() dst:%u src1:%u src2:%u op:%d\x1b[0m\n", __func__, dst, src1, src2, op);
+
     switch (op) {
     default: /* should never happen */
         return 0;
@@ -228,6 +231,9 @@ uint32_t cpu_cc_compute_all(CPUX86State *env, int op)
 target_ulong helper_cc_compute_c(target_ulong dst, target_ulong src1,
                                  target_ulong src2, int op)
 {
+    if (wataash_bootloader_started)
+        wataash_debug_os("\x1b[37m%s() dst:"TARGET_FMT_lu" src1:"TARGET_FMT_lu" src2:"TARGET_FMT_lu" op:%d\x1b[0m\n", __func__, dst, src1, src2, op);
+
     switch (op) {
     default: /* should never happen */
     case CC_OP_LOGICB:

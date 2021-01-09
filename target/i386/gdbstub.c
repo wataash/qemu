@@ -262,6 +262,8 @@ static int x86_cpu_gdb_load_seg(X86CPU *cpu, X86Seg sreg, uint8_t *mem_buf)
     return 4;
 }
 
+// wataash:
+// set eax = 7; n:0 *mem_buf:7;  main() qemu_main_loop() main_loop_wait() os_host_main_loop_wait() glib_pollfds_poll() g_main_context_dispatch() qio_channel_fd_source_dispatch() tcp_chr_read() qemu_chr_be_write() qemu_chr_be_write_impl() gdb_chr_receive() gdb_read_byte() gdb_handle_packet() run_cmd_parser() process_string_cmd() handle_set_reg() gdb_write_register() x86_cpu_gdb_write_register()
 int x86_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
 {
     X86CPU *cpu = X86_CPU(cs);
@@ -274,6 +276,7 @@ int x86_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
 
     if (n < CPU_NB_REGS) {
         if (TARGET_LONG_BITS == 64) {
+            wataash_debug_reached(); // amd64?
             if (env->hflags & HF_CS64_MASK) {
                 env->regs[gpr_map[n]] = ldtul_p(mem_buf);
             } else if (n < CPU_NB_REGS32) {
@@ -281,17 +284,40 @@ int x86_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
             }
             return sizeof(target_ulong);
         } else if (n < CPU_NB_REGS32) {
+            if (0) ;
+            else if (n == R_EAX) wataash_debug_os("\x1b[34m%s() n:%d(EAX) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_ECX) wataash_debug_os("\x1b[34m%s() n:%d(ECX) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_EDX) wataash_debug_os("\x1b[34m%s() n:%d(EDX) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_EBX) wataash_debug_os("\x1b[34m%s() n:%d(EBX) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_ESP) wataash_debug_os("\x1b[34m%s() n:%d(ESP) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_EBP) wataash_debug_os("\x1b[34m%s() n:%d(EBP) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_ESI) wataash_debug_os("\x1b[34m%s() n:%d(ESI) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_EDI) wataash_debug_os("\x1b[34m%s() n:%d(EDI) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R8)  wataash_debug_os("\x1b[34m%s() n:%d(R8)  "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R9)  wataash_debug_os("\x1b[34m%s() n:%d(R9)  "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R10) wataash_debug_os("\x1b[34m%s() n:%d(R10) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R11) wataash_debug_os("\x1b[34m%s() n:%d(R11) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R12) wataash_debug_os("\x1b[34m%s() n:%d(R12) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R13) wataash_debug_os("\x1b[34m%s() n:%d(R13) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R14) wataash_debug_os("\x1b[34m%s() n:%d(R14) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else if (n == R_R15) wataash_debug_os("\x1b[34m%s() n:%d(R15) "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+            else                 wataash_debug_os("\x1b[31m%s() n:%d(?)   "TARGET_FMT_lu"->%u\x1b[0m\n", __func__, n, env->regs[n], *mem_buf);
+
             n = gpr_map32[n];
+            // clear lower 32 bits
             env->regs[n] &= ~0xffffffffUL;
+            // set $eax = 7
             env->regs[n] |= (uint32_t)ldl_p(mem_buf);
             return 4;
         }
     } else if (n >= IDX_FP_REGS && n < IDX_FP_REGS + 8) {
+        wataash_debug_reached();
         floatx80 *fp = (floatx80 *) &env->fpregs[n - IDX_FP_REGS];
         fp->low = le64_to_cpu(* (uint64_t *) mem_buf);
         fp->high = le16_to_cpu(* (uint16_t *) (mem_buf + 8));
         return 10;
     } else if (n >= IDX_XMM_REGS && n < IDX_XMM_REGS + CPU_NB_REGS) {
+        wataash_debug_reached();
         n -= IDX_XMM_REGS;
         if (n < CPU_NB_REGS32 || TARGET_LONG_BITS == 64) {
             env->xmm_regs[n].ZMM_Q(0) = ldq_p(mem_buf);
@@ -301,6 +327,7 @@ int x86_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
     } else {
         switch (n) {
         case IDX_IP_REG:
+            // (guess) set $eip = 7
             if (TARGET_LONG_BITS == 64) {
                 if (env->hflags & HF_CS64_MASK) {
                     env->eip = ldq_p(mem_buf);
@@ -314,6 +341,7 @@ int x86_cpu_gdb_write_register(CPUState *cs, uint8_t *mem_buf, int n)
                 return 4;
             }
         case IDX_FLAGS_REG:
+            // set $eflags = 7
             env->eflags = ldl_p(mem_buf);
             return 4;
 

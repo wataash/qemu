@@ -70,6 +70,9 @@
 #define cpu_stl_kernel(e, p, v)  cpu_stl_kernel_ra(e, p, v, 0)
 #define cpu_stq_kernel(e, p, v)  cpu_stq_kernel_ra(e, p, v, 0)
 
+static inline unsigned int get_seg_limit(uint32_t e1, uint32_t e2);
+static inline uint32_t get_seg_base(uint32_t e1, uint32_t e2);
+
 /* return non zero if error */
 static inline int load_segment_ra(CPUX86State *env, uint32_t *e1_ptr,
                                uint32_t *e2_ptr, int selector,
@@ -80,10 +83,16 @@ static inline int load_segment_ra(CPUX86State *env, uint32_t *e1_ptr,
     target_ulong ptr;
 
     if (selector & 0x4) {
+        wataash_debug_os("\x1b[33m%s(): load ldt", __func__);
+        wataash_debug_reached();
         dt = &env->ldt;
     } else {
+        wataash_debug_os("\x1b[33m%s(): load gdt", __func__);
         dt = &env->gdt;
     }
+    // 0bxxxx....xxxx
+    //            ^^^ discard lower three bits
+    //            ^   selector; 0:gdt 1:ldt
     index = selector & ~7;
     if ((index + 7) > dt->limit) {
         return -1;
@@ -91,6 +100,8 @@ static inline int load_segment_ra(CPUX86State *env, uint32_t *e1_ptr,
     ptr = dt->base + index;
     *e1_ptr = cpu_ldl_kernel_ra(env, ptr, retaddr);
     *e2_ptr = cpu_ldl_kernel_ra(env, ptr + 4, retaddr);
+    wataash_debug_os(" entry %d: "TARGET_FMT_lx" 0x...todo (base:%#x limit:%#x)\x1b[0m\n", index, ptr, get_seg_base(*e1_ptr, *e2_ptr), get_seg_limit(*e1_ptr, *e2_ptr));
+
     return 0;
 }
 
@@ -1602,6 +1613,8 @@ void helper_ljmp_protected(CPUX86State *env, int new_cs, target_ulong new_eip,
     int gate_cs, type;
     uint32_t e1, e2, cpl, dpl, rpl, limit;
 
+    // excp if new_cs == 0, 1, 2, or 3 (ok if >= 4)
+    //   0xc == 0b1100
     if ((new_cs & 0xfffc) == 0) {
         raise_exception_err_ra(env, EXCP0D_GPF, 0, GETPC());
     }

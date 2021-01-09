@@ -233,6 +233,10 @@ static void kbd_write_command(void *opaque, hwaddr addr,
 {
     KBDState *s = opaque;
 
+    // xv6:
+    // seta20.1
+    // movb    $0xd1(209,KBD_CCMD_WRITE_OUTPORT),%al
+    // outb    %al,$0x64
     trace_pckbd_kbd_write_command(val);
 
     /* Bits 3-0 of the output port P2 of the keyboard controller may be pulsed
@@ -329,6 +333,9 @@ static uint64_t kbd_read_data(void *opaque, hwaddr addr,
 static void kbd_write_data(void *opaque, hwaddr addr,
                            uint64_t val, unsigned size)
 {
+    // xv6:
+    // movb    $0xdf(223),%al
+    // # 0xdf -> port 0x60outb    %al,$0x60
     KBDState *s = opaque;
 
     trace_pckbd_kbd_write_data(val);

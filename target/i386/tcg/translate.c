@@ -1915,24 +1915,60 @@ static uint64_t advance_pc(CPUX86State *env, DisasContext *s, int num_bytes)
     return pc;
 }
 
+// @ldub
+//
+// ld: load?
+//
+// u: unsigned
+// s: signed
+//
+// b: byte 1
+// w: word 2
+// l: long 4
+// q: quad 8
+
 static inline uint8_t x86_ldub_code(CPUX86State *env, DisasContext *s)
 {
+#if 0
     return translator_ldub(env, advance_pc(env, s, 1));
+#else /* 0 */
+    uint8_t b = translator_ldub(env, advance_pc(env, s, 1));
+    wataash_debug_os(" %02x", b);
+    return b;
+#endif /* 0 */
 }
 
 static inline int16_t x86_ldsw_code(CPUX86State *env, DisasContext *s)
 {
+#if 0
     return translator_ldsw(env, advance_pc(env, s, 2));
+#else /* 0 */
+    uint16_t w = translator_ldsw(env, advance_pc(env, s, 2));
+    wataash_debug_os(" %04x", w);
+    return w;
+#endif /* 0 */
 }
 
 static inline uint16_t x86_lduw_code(CPUX86State *env, DisasContext *s)
 {
+#if 0
     return translator_lduw(env, advance_pc(env, s, 2));
+#else /* 0 */
+    uint16_t w = translator_lduw(env, advance_pc(env, s, 2));
+    wataash_debug_os(" %04x", w);
+    return w;
+#endif /* 0 */
 }
 
 static inline uint32_t x86_ldl_code(CPUX86State *env, DisasContext *s)
 {
+#if 0
     return translator_ldl(env, advance_pc(env, s, 4));
+#else /* 0 */
+    uint32_t w = translator_ldl(env, advance_pc(env, s, 4));
+    wataash_debug_os(" %08x", w);
+    return w;
+#endif /* 0 */
 }
 
 #ifdef TARGET_X86_64
@@ -4474,6 +4510,7 @@ static void gen_sse(CPUX86State *env, DisasContext *s, int b,
     }
 }
 
+// disas_insn
 /* convert one instruction. s->base.is_jmp is set if the translation must
    be stopped. Return the next pc value */
 static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
@@ -4505,6 +4542,9 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
     prefixes = 0;
     rex_w = -1;
     rex_r = 0;
+
+    if (wataash_bootloader_started)
+        asm("nop");
 
  next_byte:
     b = x86_ldub_code(env, s);
@@ -4618,6 +4658,9 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
         break;
     }
 
+    if (wataash_bootloader_started)
+        asm("nop");
+
     /* Post-process prefixes.  */
     if (CODE64(s)) {
         /* In 64-bit mode, the default data size is 32-bit.  Select 64-bit
@@ -4644,6 +4687,9 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
     s->prefix = prefixes;
     s->aflag = aflag;
     s->dflag = dflag;
+
+    if (wataash_bootloader_started)
+        asm("nop");
 
     /* now check op code */
  reswitch:
@@ -7070,6 +7116,7 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
         break;
 #endif
     case 0xfa: /* cli */
+        // cli
         if (!s->vm86) {
             if (s->cpl <= s->iopl) {
                 gen_helper_cli(cpu_env);
@@ -8555,6 +8602,8 @@ static bool i386_tr_breakpoint_check(DisasContextBase *dcbase, CPUState *cpu,
     }
 }
 
+unsigned int wataash_bootloader_started;
+
 static void i386_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 {
     DisasContext *dc = container_of(dcbase, DisasContext, base);
@@ -8570,7 +8619,23 @@ static void i386_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     }
 #endif
 
+    if (dc->base.pc_next == 0x7c00)
+        wataash_bootloader_started = 1;
+    static unsigned int setbuf_once_done;
+    if (wataash_bootloader_started && !setbuf_once_done) {
+        setbuf(stdout, NULL);
+        setbuf(stderr, NULL);
+        setbuf_once_done = 1;
+    }
+    wataash_debug_os("\x1b[37m------------------------------\n");
+    wataash_debug_os("0x%08jx:\x1b[34m", (uintmax_t)dc->base.pc_next);
     pc_next = disas_insn(dc, cpu);
+    wataash_debug_os("\x1b[0m\n");
+    // log_target_disas(cpu, dc->pc_start, dc->pc - dc->pc_start);
+    (void)log_target_disas;
+    rcu_read_lock();
+    target_disas(stderr, cpu, dc->pc_start, dc->pc - dc->pc_start);
+    rcu_read_unlock();
 
     if (dc->tf || (dc->base.tb->flags & HF_INHIBIT_IRQ_MASK)) {
         /* if single step mode, we generate only one instruction and

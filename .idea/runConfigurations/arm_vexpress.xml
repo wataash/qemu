@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="arm vexpress" type="CLionExternalRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-kernel $USER_HOME$/work/vexpress/vmlinuz-5.0.0-13-generic-lpae  -initrd $USER_HOME$/work/vexpress/initrd.img-5.0.0-13-generic-lpae  -M vexpress-a15  -serial mon:stdio  -m 1024  -append &quot;root=/dev/mmcblk0 rw mem=1024M raid=noautodetect rootwait console=ttyAMA0,38400n8 devtmpfs.mount=0&quot;  -sd $USER_HOME$/work/vexpress/vexpress-4G.img  -dtb $USER_HOME$/work/vexpress/vexpress-v2p-ca15-tc1.dtb  -nographic" PASS_PARENT_ENVS_2="true" PROJECT_NAME="qemu" TARGET_NAME="cbt0" CONFIG_NAME="cbt0" RUN_PATH="$PROJECT_DIR$/build/arm-softmmu/qemu-system-arm">
+    <method v="2">
+      <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+    </method>
+  </configuration>
+</component>

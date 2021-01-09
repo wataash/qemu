@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/capstone" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/dtc" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/meson" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/QemuMacDrivers" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/SLOF" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/edk2" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/ipxe" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/openbios" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/opensbi" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/qboot" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/qemu-palcode" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/seabios" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/seabios-hppa" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/sgabios" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/skiboot" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/u-boot" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/u-boot-sam460ex" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/roms/vbootrom" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/slirp" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/tests/fp/berkeley-softfloat-3" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/tests/fp/berkeley-testfloat-3" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ui/keycodemapdb" vcs="Git" />
+  </component>
+</project>

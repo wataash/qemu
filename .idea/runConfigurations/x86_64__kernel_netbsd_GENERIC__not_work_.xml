@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="x86_64 -kernel netbsd GENERIC (not work)" type="CLionExternalRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-kernel $PROJECT_DIR$/../netbsd/obj.amd64/sys/arch/amd64/compile/GENERIC/netbsd" PASS_PARENT_ENVS_2="true" PROJECT_NAME="qemu" TARGET_NAME="cbt0" CONFIG_NAME="cbt0" RUN_PATH="$PROJECT_DIR$/build/x86_64-softmmu/qemu-system-x86_64">
+    <method v="2">
+      <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+    </method>
+  </configuration>
+</component>

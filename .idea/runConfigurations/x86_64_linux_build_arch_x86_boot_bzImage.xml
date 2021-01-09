@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="x86_64 linux/build/arch/x86/boot/bzImage" type="CLionExternalRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-m 1024  -nographic  -kernel $PROJECT_DIR$/../linux/build/arch/x86/boot/bzImage" PASS_PARENT_ENVS_2="true" PROJECT_NAME="qemu" TARGET_NAME="cbt0" CONFIG_NAME="cbt0" RUN_PATH="$PROJECT_DIR$/build/x86_64-softmmu/qemu-system-x86_64">
+    <method v="2">
+      <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+    </method>
+  </configuration>
+</component>

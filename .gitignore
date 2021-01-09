@@ -1,3 +1,5 @@
+/build-debug/
+
 /GNUmakefile
 /build/
 *.pyc

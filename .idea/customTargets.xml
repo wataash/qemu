@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CLionExternalBuildManager">
+    <target id="557e7aac-3b6c-4300-a462-8b10d9429c47" name="cbt0" projectName="qemu">
+      <configuration id="03b922b1-51eb-487f-bb66-abfb526abac9" name="cbt0">
+        <build type="TOOL">
+          <tool actionId="Tool_External Tools_etecho" />
+        </build>
+      </configuration>
+    </target>
+  </component>
+</project>

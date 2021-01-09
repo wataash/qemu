@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="arm netbsd VIRT" type="CLionExternalRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-machine virt  -nographic  -nic user,smb=$USER_HOME$/work/,hostfwd=tcp::10822-:22,hostfwd=udp::10861-:161  -kernel $PROJECT_DIR$/../netbsd/obj.arm/sys/arch/evbarm/compile/VIRT/netbsd.ub  -gdb tcp::10834  -no-reboot  -S  -trace gdb*" PASS_PARENT_ENVS_2="true" PROJECT_NAME="qemu" TARGET_NAME="cbt0" CONFIG_NAME="cbt0" RUN_PATH="$PROJECT_DIR$/build/arm-softmmu/qemu-system-arm">
+    <method v="2">
+      <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+    </method>
+  </configuration>
+</component>
